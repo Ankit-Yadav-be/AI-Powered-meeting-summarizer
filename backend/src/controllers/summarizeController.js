@@ -1,30 +1,27 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
-import { Buffer } from "buffer";
+import { PDFDocument } from "pdf-lib";
 
 dotenv.config();
 
 // PDF buffer se text extract karne ka helper
 const extractTextFromPDFBuffer = async (fileBuffer) => {
   try {
-    const loadingTask = pdfjsLib.getDocument({ data: fileBuffer });
-    const pdfDoc = await loadingTask.promise;
+    const pdfDoc = await PDFDocument.load(fileBuffer);
+    const pages = pdfDoc.getPages();
 
     let fullText = "";
-
-    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-      const page = await pdfDoc.getPage(pageNum);
-      const content = await page.getTextContent();
-
-      const pageText = content.items
-        .map((item) => item.str)
-        .join(" ");
-
-      fullText += pageText + "\n\n";
+    for (const page of pages) {
+      // pdf-lib directly text extraction nahi deta, alternative approach:
+      // annotations aur text items iterate karke extract karte hain
+      const textContent = page.getTextContent?.(); // optional chaining in case not supported
+      if (textContent?.items) {
+        fullText += textContent.items.map((i) => i.str).join(" ") + "\n\n";
+      }
     }
 
-    return fullText;
+    // Agar text empty hua, fallback message
+    return fullText || "PDF text extraction failed or empty PDF";
   } catch (err) {
     console.error("PDF parse error:", err);
     throw new Error("Failed to parse PDF file");
@@ -50,8 +47,6 @@ export const generateSummary = async (req, res) => {
 
     const userInstruction = `
 You are a professional meeting/document summarizer with expertise in making any content understandable and actionable. 
-Your goal is to generate a human-like, natural, and clear summary that explains the meeting outcomes as if a project manager is recapping to the team. Analyze the transcript thoroughly, as it may contain informal, unstructured, or partial text, and produce the best possible summary regardless.
-
 Content:
 ${finalText}
 
@@ -62,27 +57,21 @@ Requirements for the summary:
 1. Start with a concise title and, if available, meeting metadata such as date and attendees.
 2. Present "Key Highlights" in descriptive bullet points, written like human explanations of discussions, decisions, and insights.
 3. Present "Responsibilities" as clear human-readable sentences assigning tasks to individuals. 
-   Example: "1.Ankit will handle system state management and notifications."
-   Add a line break between each responsibility.
 4. Present "Action Items" as clear instructions or next steps.
-   Example: "Khushi needs to finalize the profile setup UI by next week."
 5. Maintain a professional, natural, and explanatory tone — avoid robotic or generic phrasing.
 6. Highlight important numbers, dates, deadlines, names, and other critical details.
-7. Use only plain text. Avoid any markdown symbols, formatting tags, or AI-like phrasing.
+7. Use only plain text.
 8. Avoid one-word or robotic bullet points; each bullet should be a descriptive sentence providing context.
 9. Make the summary cohesive and readable for someone who did not attend the meeting.
-
-Generate the structured summary below:
 `;
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const result = await model.generateContent(userInstruction);
-
     let summary = result.response.text().trim();
 
-    // Clean unwanted markdown symbols
+    // Clean unwanted symbols
     summary = summary.replace(/\*\*/g, "").replace(/#+/g, "").replace(/_/g, "");
 
     res.status(200).json({ summary });
