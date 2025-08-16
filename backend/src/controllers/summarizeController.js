@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { Readable } from "stream";
+import fs from "fs/promises";
 
 dotenv.config();
 
@@ -12,16 +12,17 @@ export const generateSummary = async (req, res) => {
 
     // Agar PDF upload hai
     if (req.file) {
-      console.log("PDF buffer detected. Using LangChain PDFLoader directly from buffer...");
+      console.log("PDF buffer detected. Writing to /tmp for PDFLoader...");
 
-      // Convert buffer to Readable stream (PDFLoader accepts fs path or stream)
-      const stream = Readable.from(req.file.buffer);
+      // Temporary file Vercel serverless ke liye
+      const tempFilePath = `/tmp/${req.file.originalname}`;
+      await fs.writeFile(tempFilePath, req.file.buffer);
 
-      // PDFLoader init using stream
-      const loader = new PDFLoader(stream, {
-        splitPages: false,               // agar page-wise nahi chahiye
-        parsedItemSeparator: "",         // extra spaces remove
-        pdfjs: () => import("pdfjs-dist/legacy/build/pdf.js") // custom pdfjs
+      // PDFLoader init
+      const loader = new PDFLoader(tempFilePath, {
+        splitPages: false,
+        parsedItemSeparator: "",
+        pdfjs: () => import("pdfjs-dist/legacy/build/pdf.js"),
       });
 
       const docs = await loader.load();
