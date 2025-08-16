@@ -1,14 +1,30 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import pdf from "pdf-parse";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js"; // buffer-friendly
+import { Buffer } from "buffer";
 
 dotenv.config();
 
 // PDF buffer se text extract karne ka helper
 const extractTextFromPDFBuffer = async (fileBuffer) => {
   try {
-    const data = await pdf(fileBuffer);
-    return data.text;
+    const loadingTask = pdfjsLib.getDocument({ data: fileBuffer });
+    const pdfDoc = await loadingTask.promise;
+
+    let fullText = "";
+
+    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+      const page = await pdfDoc.getPage(pageNum);
+      const content = await page.getTextContent();
+
+      const pageText = content.items
+        .map((item) => item.str)
+        .join(" ");
+
+      fullText += pageText + "\n\n";
+    }
+
+    return fullText;
   } catch (err) {
     console.error("PDF parse error:", err);
     throw new Error("Failed to parse PDF file");
