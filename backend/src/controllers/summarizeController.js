@@ -4,8 +4,8 @@ import PDFParser from "pdf2json";
 
 dotenv.config();
 
-// PDF se text extract karne ka helper function
-const extractTextFromPDF = (filePath) => {
+// PDF buffer se text extract karne ka helper
+const extractTextFromPDFBuffer = (fileBuffer) => {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser();
 
@@ -17,28 +17,25 @@ const extractTextFromPDF = (filePath) => {
             decodeURIComponent(t.R.map((r) => r.T).join(""))
           ).join(" ")
         ).join("\n\n");
-
         resolve(text);
       } catch (err) {
         reject(err);
       }
     });
 
-    pdfParser.loadPDF(filePath);
+    pdfParser.parseBuffer(fileBuffer); // <-- buffer se parse karenge
   });
 };
 
 export const generateSummary = async (req, res) => {
   try {
-    console.log("Gemini API Key:", process.env.GEMINI_API_KEY);
-
     const { transcript, prompt } = req.body;
     let finalText = transcript;
 
-    // Agar user ne PDF upload kiya hai to use karo
+    // Agar PDF upload kiya gaya hai to buffer se extract karo
     if (req.file) {
-      console.log("Uploaded PDF Path:", req.file.path);
-      finalText = await extractTextFromPDF(req.file.path);
+      console.log("Uploaded PDF buffer available");
+      finalText = await extractTextFromPDFBuffer(req.file.buffer);
     }
 
     if (!finalText || !prompt) {
@@ -47,8 +44,7 @@ export const generateSummary = async (req, res) => {
         .json({ error: "Transcript ya PDF text aur prompt required hai" });
     }
 
-    //  Improved Prompt Engineering
-const userInstruction = `
+    const userInstruction = `
 You are a professional meeting/document summarizer with expertise in making any content understandable and actionable. 
 Your goal is to generate a human-like, natural, and clear summary that explains the meeting outcomes as if a project manager is recapping to the team. Analyze the transcript thoroughly, as it may contain informal, unstructured, or partial text, and produce the best possible summary regardless.
 
@@ -74,7 +70,6 @@ Requirements for the summary:
 
 Generate the structured summary below:
 `;
-
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
