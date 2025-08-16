@@ -72,7 +72,7 @@ const Home = () => {
       if (file) formData.append("pdfFile", file);
       else formData.append("transcript", transcript);
 
-      const res = await axios.post("http://localhost:8000/api/summarize", formData, {
+      const res = await axios.post("https://ai-powered-meeting-summarizer.vercel.app/api/summarize", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -112,7 +112,7 @@ const Home = () => {
     const recipientArray = recipients.split(",").map((email) => email.trim());
 
     try {
-      await axios.post("http://localhost:8000/api/send-email", {
+      await axios.post("https://ai-powered-meeting-summarizer.vercel.app/api/send-email", {
         recipients: recipientArray,
         subject,
         message: summary,
