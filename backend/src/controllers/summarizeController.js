@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js"; // buffer-friendly
+import pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 import { Buffer } from "buffer";
 
 dotenv.config();
