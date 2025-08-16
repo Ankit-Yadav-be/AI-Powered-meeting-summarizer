@@ -20,7 +20,4 @@ app.get("/", (req, res) => {
 app.use("/api/summarize", summarizeRoutes);
 app.use("/api/send-email", emailRoutes);
 
-const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+export default app;
