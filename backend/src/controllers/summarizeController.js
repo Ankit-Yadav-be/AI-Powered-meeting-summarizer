@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PDFDocument } from "pdf-lib";
+import Tesseract from "tesseract.js";
 
 dotenv.config();
 
@@ -12,19 +13,27 @@ const extractTextFromPDFBuffer = async (fileBuffer) => {
 
     let fullText = "";
     for (const page of pages) {
-      // pdf-lib directly text extraction nahi deta, alternative approach:
-      // annotations aur text items iterate karke extract karte hain
-      const textContent = page.getTextContent?.(); // optional chaining in case not supported
+      const textContent = page.getTextContent?.(); // optional chaining
       if (textContent?.items) {
         fullText += textContent.items.map((i) => i.str).join(" ") + "\n\n";
       }
     }
 
-    // Agar text empty hua, fallback message
-    return fullText || "PDF text extraction failed or empty PDF";
+    return fullText;
   } catch (err) {
     console.error("PDF parse error:", err);
-    throw new Error("Failed to parse PDF file");
+    return "";
+  }
+};
+
+// OCR fallback helper
+const extractTextFromPDFBufferOCR = async (fileBuffer) => {
+  try {
+    const { data: { text } } = await Tesseract.recognize(fileBuffer, "eng");
+    return text || "";
+  } catch (err) {
+    console.error("OCR PDF parse error:", err);
+    return "";
   }
 };
 
@@ -33,10 +42,17 @@ export const generateSummary = async (req, res) => {
     const { transcript, prompt } = req.body;
     let finalText = transcript;
 
-    // Agar PDF upload kiya gaya hai to buffer se extract karo
     if (req.file) {
       console.log("Uploaded PDF buffer available");
+
+      // Step 1: pdf-lib extraction
       finalText = await extractTextFromPDFBuffer(req.file.buffer);
+
+      // Step 2: OCR fallback if empty
+      if (!finalText || finalText.trim() === "") {
+        console.log("PDF text empty, applying OCR fallback");
+        finalText = await extractTextFromPDFBufferOCR(req.file.buffer);
+      }
     }
 
     if (!finalText || !prompt) {
@@ -71,7 +87,6 @@ Requirements for the summary:
     const result = await model.generateContent(userInstruction);
     let summary = result.response.text().trim();
 
-    // Clean unwanted symbols
     summary = summary.replace(/\*\*/g, "").replace(/#+/g, "").replace(/_/g, "");
 
     res.status(200).json({ summary });
