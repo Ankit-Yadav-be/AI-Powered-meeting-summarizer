@@ -1,30 +1,18 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import PDFParser from "pdf2json";
+import pdf from "pdf-parse";
 
 dotenv.config();
 
 // PDF buffer se text extract karne ka helper
-const extractTextFromPDFBuffer = (fileBuffer) => {
-  return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser();
-
-    pdfParser.on("pdfParser_dataError", (err) => reject(err.parserError));
-    pdfParser.on("pdfParser_dataReady", (pdfData) => {
-      try {
-        let text = pdfData.Pages.map((page) =>
-          page.Texts.map((t) =>
-            decodeURIComponent(t.R.map((r) => r.T).join(""))
-          ).join(" ")
-        ).join("\n\n");
-        resolve(text);
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    pdfParser.parseBuffer(fileBuffer); // <-- buffer se parse karenge
-  });
+const extractTextFromPDFBuffer = async (fileBuffer) => {
+  try {
+    const data = await pdf(fileBuffer);
+    return data.text;
+  } catch (err) {
+    console.error("PDF parse error:", err);
+    throw new Error("Failed to parse PDF file");
+  }
 };
 
 export const generateSummary = async (req, res) => {
