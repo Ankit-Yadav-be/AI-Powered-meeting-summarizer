@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import fs from "fs";
 import pdf from "pdf-parse";
 
 dotenv.config();
@@ -15,6 +16,16 @@ const extractTextFromPDF = async (fileBuffer) => {
   }
 };
 
+// TXT file se text extract
+const extractTextFromTXT = async (fileBuffer) => {
+  try {
+    return fileBuffer.toString("utf-8"); // buffer ko string me convert karo
+  } catch (err) {
+    console.error("[extractTextFromTXT] TXT parsing error:", err);
+    throw new Error("Failed to parse TXT file");
+  }
+};
+
 export const generateSummary = async (req, res) => {
   try {
     console.log("[generateSummary] Gemini API Key:", process.env.GEMINI_API_KEY);
@@ -22,22 +33,31 @@ export const generateSummary = async (req, res) => {
     const { transcript, prompt } = req.body;
     let finalText = transcript?.trim() || "";
 
-    // Agar PDF file upload hui hai
+    // Agar file upload hui hai
     if (req.file && req.file.buffer) {
-      console.log("[generateSummary] PDF received:", req.file.originalname);
-      finalText = await extractTextFromPDF(req.file.buffer);
+      console.log("[generateSummary] File received:", req.file.originalname);
+
+      const fileExt = req.file.originalname.split(".").pop().toLowerCase();
+
+      if (fileExt === "pdf") {
+        finalText = await extractTextFromPDF(req.file.buffer);
+      } else if (fileExt === "txt") {
+        finalText = await extractTextFromTXT(req.file.buffer);
+      } else {
+        return res.status(400).json({ error: "Unsupported file type. Please upload PDF or TXT." });
+      }
     }
 
-    // Agar na transcript ho na PDF
+    // Agar na transcript ho na file
     if (!finalText) {
-      return res.status(400).json({ error: "Please provide a PDF file or transcript text." });
+      return res.status(400).json({ error: "Please provide a PDF/TXT file or transcript text." });
     }
 
     if (!prompt?.trim()) {
       return res.status(400).json({ error: "Prompt is required." });
     }
 
-    // Improved Prompt Engineering
+    // Prompt for Gemini AI
     const userInstruction = `
 You are a professional meeting/document summarizer with expertise in making content understandable and actionable.
 

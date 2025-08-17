@@ -73,6 +73,7 @@ const Home = () => {
       else formData.append("transcript", transcript);
 
       const res = await axios.post("https://ai-powered-meeting-summarizer.vercel.app/api/summarize", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       setSummary(res.data.summary);
