@@ -1,25 +1,12 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import fs from "fs";
-import pdf from "pdf-parse";
 
 dotenv.config();
 
-// PDF se text extract karne ka helper function (buffer ke liye)
-const extractTextFromPDF = async (fileBuffer) => {
-  try {
-    const pdfData = await pdf(fileBuffer);
-    return pdfData.text || "";
-  } catch (err) {
-    console.error("[extractTextFromPDF] PDF parsing error:", err);
-    throw new Error("Failed to parse PDF file");
-  }
-};
-
-// TXT file se text extract
+// TXT se text extract karne ka helper
 const extractTextFromTXT = async (fileBuffer) => {
   try {
-    return fileBuffer.toString("utf-8"); // buffer ko string me convert karo
+    return fileBuffer.toString("utf-8"); // buffer ko string me convert
   } catch (err) {
     console.error("[extractTextFromTXT] TXT parsing error:", err);
     throw new Error("Failed to parse TXT file");
@@ -33,24 +20,20 @@ export const generateSummary = async (req, res) => {
     const { transcript, prompt } = req.body;
     let finalText = transcript?.trim() || "";
 
-    // Agar file upload hui hai
+    // Agar TXT file upload hui hai
     if (req.file && req.file.buffer) {
-      console.log("[generateSummary] File received:", req.file.originalname);
-
       const fileExt = req.file.originalname.split(".").pop().toLowerCase();
-
-      if (fileExt === "pdf") {
-        finalText = await extractTextFromPDF(req.file.buffer);
-      } else if (fileExt === "txt") {
-        finalText = await extractTextFromTXT(req.file.buffer);
-      } else {
-        return res.status(400).json({ error: "Unsupported file type. Please upload PDF or TXT." });
+      if (fileExt !== "txt") {
+        return res.status(400).json({ error: "Unsupported file type. Only TXT allowed." });
       }
+
+      console.log("[generateSummary] TXT file received:", req.file.originalname);
+      finalText = await extractTextFromTXT(req.file.buffer);
     }
 
     // Agar na transcript ho na file
     if (!finalText) {
-      return res.status(400).json({ error: "Please provide a PDF/TXT file or transcript text." });
+      return res.status(400).json({ error: "Please provide a TXT file or transcript text." });
     }
 
     if (!prompt?.trim()) {
@@ -85,7 +68,7 @@ Requirements for the summary:
     const result = await model.generateContent(userInstruction);
     let summary = result.response.text().trim();
 
-    // Clean unwanted markdown symbols
+    // Clean unwanted symbols
     summary = summary.replace(/\*\*/g, "").replace(/#+/g, "").replace(/_/g, "");
 
     res.status(200).json({ summary });
