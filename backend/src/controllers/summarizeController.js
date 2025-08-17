@@ -3,10 +3,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
-// TXT se text extract karne ka helper
+
 const extractTextFromTXT = async (fileBuffer) => {
   try {
-    return fileBuffer.toString("utf-8"); // buffer ko string me convert
+    return fileBuffer.toString("utf-8"); 
   } catch (err) {
     console.error("[extractTextFromTXT] TXT parsing error:", err);
     throw new Error("Failed to parse TXT file");
@@ -20,7 +20,7 @@ export const generateSummary = async (req, res) => {
     const { transcript, prompt } = req.body;
     let finalText = transcript?.trim() || "";
 
-    // Agar TXT file upload hui hai
+    
     if (req.file && req.file.buffer) {
       const fileExt = req.file.originalname.split(".").pop().toLowerCase();
       if (fileExt !== "txt") {
@@ -31,7 +31,7 @@ export const generateSummary = async (req, res) => {
       finalText = await extractTextFromTXT(req.file.buffer);
     }
 
-    // Agar na transcript ho na file
+   
     if (!finalText) {
       return res.status(400).json({ error: "Please provide a TXT file or transcript text." });
     }
@@ -40,9 +40,9 @@ export const generateSummary = async (req, res) => {
       return res.status(400).json({ error: "Prompt is required." });
     }
 
-    // Prompt for Gemini AI
-    const userInstruction = `
-You are a professional meeting/document summarizer with expertise in making content understandable and actionable.
+   
+const userInstruction = `
+You are an expert meeting and document summarizer. Your goal is to produce a **human-level, professional, and actionable summary** that reads as if written by a senior project manager, without sounding like AI-generated text.
 
 Content:
 ${finalText}
@@ -50,17 +50,21 @@ ${finalText}
 User Instruction:
 ${prompt}
 
-Requirements for the summary:
-1. Start with a concise title and meeting metadata if available.
-2. Present "Key Highlights" in descriptive bullet points.
-3. Present "Responsibilities" as clear sentences assigning tasks to individuals.
-4. Present "Action Items" as clear instructions or next steps.
-5. Maintain a professional, natural, and explanatory tone.
-6. Highlight important numbers, dates, deadlines, names, and other critical details.
-7. Use only plain text, avoid markdown or AI-like phrasing.
-8. Each bullet should provide context.
-9. Make the summary cohesive and readable for someone who did not attend the meeting.
+Guidelines for creating the summary:
+1. Begin with a **concise and descriptive title** including meeting date, attendees, and topic if available.
+2. Provide **Key Highlights** in detailed bullet points. Each bullet should fully explain discussions, decisions, insights, and context, as if summarizing for someone who did not attend.
+3. Clearly list **Responsibilities**, assigning tasks to specific individuals with deadlines where possible. Use natural, human language.
+4. Clearly state **Action Items** with actionable next steps for each relevant participant. Include timelines if mentioned.
+5. Maintain a **professional, natural, and narrative style**; avoid robotic, generic, or AI-like phrasing.
+6. Emphasize important numbers, dates, deadlines, names, and other critical details naturally within sentences.
+7. Use **plain text only**, no markdown, emojis, or formatting symbols.
+8. Ensure every bullet and sentence provides context and reads fluidly.
+9. Make the summary **cohesive, logically structured, and easy to read**, as if written for executive-level understanding.
+10. Keep a **human tone**, including transitions and natural explanations, making it indistinguishable from a human-written summary.
+
+Generate the structured summary below based on these guidelines:
 `;
+
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
