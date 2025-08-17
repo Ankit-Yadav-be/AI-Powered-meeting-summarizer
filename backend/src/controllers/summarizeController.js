@@ -1,31 +1,15 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import PDFParser from "pdf2json";
+import fs from "fs";
+import pdf from "pdf-parse";
 
 dotenv.config();
 
 // PDF se text extract karne ka helper function
-const extractTextFromPDF = (filePath) => {
-  return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser();
-
-    pdfParser.on("pdfParser_dataError", (err) => reject(err.parserError));
-    pdfParser.on("pdfParser_dataReady", (pdfData) => {
-      try {
-        let text = pdfData.Pages.map((page) =>
-          page.Texts.map((t) =>
-            decodeURIComponent(t.R.map((r) => r.T).join(""))
-          ).join(" ")
-        ).join("\n\n");
-
-        resolve(text);
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    pdfParser.loadPDF(filePath);
-  });
+const extractTextFromPDF = async (filePath) => {
+  const dataBuffer = fs.readFileSync(filePath);
+  const pdfData = await pdf(dataBuffer);
+  return pdfData.text; // pure text
 };
 
 export const generateSummary = async (req, res) => {
@@ -47,8 +31,8 @@ export const generateSummary = async (req, res) => {
         .json({ error: "Transcript ya PDF text aur prompt required hai" });
     }
 
-    //  Improved Prompt Engineering
-const userInstruction = `
+    // Improved Prompt Engineering
+    const userInstruction = `
 You are a professional meeting/document summarizer with expertise in making any content understandable and actionable. 
 Your goal is to generate a human-like, natural, and clear summary that explains the meeting outcomes as if a project manager is recapping to the team. Analyze the transcript thoroughly, as it may contain informal, unstructured, or partial text, and produce the best possible summary regardless.
 
@@ -75,12 +59,10 @@ Requirements for the summary:
 Generate the structured summary below:
 `;
 
-
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const result = await model.generateContent(userInstruction);
-
     let summary = result.response.text().trim();
 
     // Clean unwanted markdown symbols

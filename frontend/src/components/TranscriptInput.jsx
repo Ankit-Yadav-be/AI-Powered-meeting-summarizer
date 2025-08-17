@@ -112,7 +112,7 @@ const TranscriptInput = ({ transcript, setTranscript, prompt, setPrompt, onGener
           _hover={{ transform: "scale(1.05)", boxShadow: "2xl" }}
           transition="all 0.2s ease"
         >
-           Generate Summary
+          Generate Summary
         </Button>
       </VStack>
     </Box>
