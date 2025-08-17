@@ -6,14 +6,12 @@ dotenv.config();
 
 // PDF se text extract karne ka helper function (buffer ke liye)
 const extractTextFromPDF = async (fileBuffer) => {
-  console.log("[extractTextFromPDF] PDF buffer received:", fileBuffer?.length, "bytes");
   try {
     const pdfData = await pdf(fileBuffer);
-    console.log("[extractTextFromPDF] PDF text length:", pdfData.text.length);
-    return pdfData.text; // pure text
+    return pdfData.text || "";
   } catch (err) {
-    console.error("[extractTextFromPDF] Error parsing PDF:", err);
-    throw err;
+    console.error("[extractTextFromPDF] PDF parsing error:", err);
+    throw new Error("Failed to parse PDF file");
   }
 };
 
@@ -22,40 +20,26 @@ export const generateSummary = async (req, res) => {
     console.log("[generateSummary] Gemini API Key:", process.env.GEMINI_API_KEY);
 
     const { transcript, prompt } = req.body;
-    console.log("[generateSummary] Transcript length:", transcript ? transcript.length : 0);
-    console.log("[generateSummary] Prompt received:", !!prompt);
+    let finalText = transcript?.trim() || "";
 
-    let finalText = transcript;
-
-    // Agar user ne PDF upload kiya hai to use karo (memoryStorage ke liye)
-    if (req.file) {
-      console.log("[generateSummary] PDF received in memory:", req.file.originalname);
-      console.log("[generateSummary] PDF mimetype:", req.file.mimetype);
-      console.log("[generateSummary] PDF buffer size:", req.file.buffer.length, "bytes");
-
-      // ERROR SOURCE CHECK:
-      if (!req.file.buffer) {
-        console.error("[generateSummary] ERROR: req.file.buffer is missing! Cannot parse PDF.");
-        return res.status(400).json({ error: "PDF buffer missing. Upload failed?" });
-      }
-
-      finalText = await extractTextFromPDF(req.file.buffer); // buffer use karo
-      console.log("[generateSummary] Extracted PDF text length:", finalText.length);
-    } else {
-      console.log("[generateSummary] No PDF uploaded, using transcript.");
+    // Agar PDF file upload hui hai
+    if (req.file && req.file.buffer) {
+      console.log("[generateSummary] PDF received:", req.file.originalname);
+      finalText = await extractTextFromPDF(req.file.buffer);
     }
 
-    if (!finalText || !prompt) {
-      console.warn("[generateSummary] ERROR: Missing finalText or prompt.");
-      return res
-        .status(400)
-        .json({ error: "Transcript ya PDF text aur prompt required hai" });
+    // Agar na transcript ho na PDF
+    if (!finalText) {
+      return res.status(400).json({ error: "Please provide a PDF file or transcript text." });
+    }
+
+    if (!prompt?.trim()) {
+      return res.status(400).json({ error: "Prompt is required." });
     }
 
     // Improved Prompt Engineering
     const userInstruction = `
-You are a professional meeting/document summarizer with expertise in making any content understandable and actionable. 
-Your goal is to generate a human-like, natural, and clear summary that explains the meeting outcomes as if a project manager is recapping to the team. Analyze the transcript thoroughly, as it may contain informal, unstructured, or partial text, and produce the best possible summary regardless.
+You are a professional meeting/document summarizer with expertise in making content understandable and actionable.
 
 Content:
 ${finalText}
@@ -64,23 +48,17 @@ User Instruction:
 ${prompt}
 
 Requirements for the summary:
-1. Start with a concise title and, if available, meeting metadata such as date and attendees.
-2. Present "Key Highlights" in descriptive bullet points, written like human explanations of discussions, decisions, and insights.
-3. Present "Responsibilities" as clear human-readable sentences assigning tasks to individuals. 
-   Example: "1.Ankit will handle system state management and notifications."
-   Add a line break between each responsibility.
+1. Start with a concise title and meeting metadata if available.
+2. Present "Key Highlights" in descriptive bullet points.
+3. Present "Responsibilities" as clear sentences assigning tasks to individuals.
 4. Present "Action Items" as clear instructions or next steps.
-   Example: "Khushi needs to finalize the profile setup UI by next week."
-5. Maintain a professional, natural, and explanatory tone — avoid robotic or generic phrasing.
+5. Maintain a professional, natural, and explanatory tone.
 6. Highlight important numbers, dates, deadlines, names, and other critical details.
-7. Use only plain text. Avoid any markdown symbols, formatting tags, or AI-like phrasing.
-8. Avoid one-word or robotic bullet points; each bullet should be a descriptive sentence providing context.
+7. Use only plain text, avoid markdown or AI-like phrasing.
+8. Each bullet should provide context.
 9. Make the summary cohesive and readable for someone who did not attend the meeting.
-
-Generate the structured summary below:
 `;
 
-    console.log("[generateSummary] Sending instruction to Gemini AI, length:", userInstruction.length);
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -90,18 +68,14 @@ Generate the structured summary below:
     // Clean unwanted markdown symbols
     summary = summary.replace(/\*\*/g, "").replace(/#+/g, "").replace(/_/g, "");
 
-    console.log("[generateSummary] Summary generated, length:", summary.length);
-
     res.status(200).json({ summary });
   } catch (error) {
-    console.error("[generateSummary] Error in generateSummary:", error);
+    console.error("[generateSummary] Error:", error);
 
     if (error.response?.status === 401) {
-      return res
-        .status(401)
-        .json({ error: "Invalid Gemini API Key. Please check your key." });
+      return res.status(401).json({ error: "Invalid Gemini API Key." });
     }
 
-    res.status(500).json({ error: "Failed to generate summary" });
+    res.status(500).json({ error: "Failed to generate summary." });
   }
 };
