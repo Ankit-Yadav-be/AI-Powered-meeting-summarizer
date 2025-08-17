@@ -6,24 +6,47 @@ dotenv.config();
 
 // PDF se text extract karne ka helper function (buffer ke liye)
 const extractTextFromPDF = async (fileBuffer) => {
-  const pdfData = await pdf(fileBuffer);
-  return pdfData.text; // pure text
+  console.log("[extractTextFromPDF] PDF buffer received:", fileBuffer?.length, "bytes");
+  try {
+    const pdfData = await pdf(fileBuffer);
+    console.log("[extractTextFromPDF] PDF text length:", pdfData.text.length);
+    return pdfData.text; // pure text
+  } catch (err) {
+    console.error("[extractTextFromPDF] Error parsing PDF:", err);
+    throw err;
+  }
 };
 
 export const generateSummary = async (req, res) => {
   try {
-    console.log("Gemini API Key:", process.env.GEMINI_API_KEY);
+    console.log("[generateSummary] Gemini API Key:", process.env.GEMINI_API_KEY);
 
     const { transcript, prompt } = req.body;
+    console.log("[generateSummary] Transcript length:", transcript ? transcript.length : 0);
+    console.log("[generateSummary] Prompt received:", !!prompt);
+
     let finalText = transcript;
 
     // Agar user ne PDF upload kiya hai to use karo (memoryStorage ke liye)
     if (req.file) {
-      console.log("PDF received in memory:", req.file.originalname);
+      console.log("[generateSummary] PDF received in memory:", req.file.originalname);
+      console.log("[generateSummary] PDF mimetype:", req.file.mimetype);
+      console.log("[generateSummary] PDF buffer size:", req.file.buffer.length, "bytes");
+
+      // ERROR SOURCE CHECK:
+      if (!req.file.buffer) {
+        console.error("[generateSummary] ERROR: req.file.buffer is missing! Cannot parse PDF.");
+        return res.status(400).json({ error: "PDF buffer missing. Upload failed?" });
+      }
+
       finalText = await extractTextFromPDF(req.file.buffer); // buffer use karo
+      console.log("[generateSummary] Extracted PDF text length:", finalText.length);
+    } else {
+      console.log("[generateSummary] No PDF uploaded, using transcript.");
     }
 
     if (!finalText || !prompt) {
+      console.warn("[generateSummary] ERROR: Missing finalText or prompt.");
       return res
         .status(400)
         .json({ error: "Transcript ya PDF text aur prompt required hai" });
@@ -57,6 +80,7 @@ Requirements for the summary:
 Generate the structured summary below:
 `;
 
+    console.log("[generateSummary] Sending instruction to Gemini AI, length:", userInstruction.length);
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -66,9 +90,11 @@ Generate the structured summary below:
     // Clean unwanted markdown symbols
     summary = summary.replace(/\*\*/g, "").replace(/#+/g, "").replace(/_/g, "");
 
+    console.log("[generateSummary] Summary generated, length:", summary.length);
+
     res.status(200).json({ summary });
   } catch (error) {
-    console.error("Error in generateSummary:", error);
+    console.error("[generateSummary] Error in generateSummary:", error);
 
     if (error.response?.status === 401) {
       return res
