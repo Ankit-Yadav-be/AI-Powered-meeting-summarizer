@@ -1,14 +1,12 @@
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import fs from "fs";
 import pdf from "pdf-parse";
 
 dotenv.config();
 
-// PDF se text extract karne ka helper function
-const extractTextFromPDF = async (filePath) => {
-  const dataBuffer = fs.readFileSync(filePath);
-  const pdfData = await pdf(dataBuffer);
+// PDF se text extract karne ka helper function (buffer ke liye)
+const extractTextFromPDF = async (fileBuffer) => {
+  const pdfData = await pdf(fileBuffer);
   return pdfData.text; // pure text
 };
 
@@ -19,10 +17,10 @@ export const generateSummary = async (req, res) => {
     const { transcript, prompt } = req.body;
     let finalText = transcript;
 
-    // Agar user ne PDF upload kiya hai to use karo
+    // Agar user ne PDF upload kiya hai to use karo (memoryStorage ke liye)
     if (req.file) {
-      console.log("Uploaded PDF Path:", req.file.path);
-      finalText = await extractTextFromPDF(req.file.path);
+      console.log("PDF received in memory:", req.file.originalname);
+      finalText = await extractTextFromPDF(req.file.buffer); // buffer use karo
     }
 
     if (!finalText || !prompt) {
